@@ -478,6 +478,14 @@ struct iommufd_attach_handle {
 /* Convert an iommu attach handle to iommufd handle. */
 #define to_iommufd_handle(hdl)	container_of(hdl, struct iommufd_attach_handle, handle)
 
+struct iommufd_attach_handle *
+iommufd_device_get_attach_handle(struct iommufd_device *idev);
+int iommufd_dev_attach_handle(struct iommufd_hw_pagetable *hwpt,
+			      struct iommufd_device *idev);
+int iommufd_dev_replace_handle(struct iommufd_device *idev,
+			       struct iommufd_hw_pagetable *hwpt,
+			       struct iommufd_hw_pagetable *old);
+
 static inline struct iommufd_fault *
 iommufd_get_fault(struct iommufd_ucmd *ucmd, u32 id)
 {
