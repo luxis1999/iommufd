@@ -1944,7 +1944,7 @@ static int domain_setup_first_level(struct intel_iommu *iommu,
 					     flags);
 }
 
-static bool dev_is_real_dma_subdevice(struct device *dev)
+bool dev_is_real_dma_subdevice(struct device *dev)
 {
 	return dev && dev_is_pci(dev) &&
 	       pci_real_dma_dev(to_pci_dev(dev)) != to_pci_dev(dev);
