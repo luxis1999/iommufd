@@ -1237,6 +1237,9 @@ domain_add_dev_pasid(struct iommu_domain *domain,
 		     struct device *dev, ioasid_t pasid);
 void domain_remove_dev_pasid(struct iommu_domain *domain,
 			     struct device *dev, ioasid_t pasid);
+int intel_iommu_set_dev_pasid(struct iommu_domain *domain,
+			      struct device *dev, ioasid_t pasid,
+			      struct iommu_domain *old);
 
 int dmar_ir_support(void);
 

@@ -284,6 +284,11 @@ static int __init intel_iommu_setup(char *str)
 }
 __setup("intel_iommu=", intel_iommu_setup);
 
+static int domain_type_is_nested(struct dmar_domain *domain)
+{
+	return domain->domain.type == IOMMU_DOMAIN_NESTED;
+}
+
 static int domain_pfn_supported(struct dmar_domain *domain, unsigned long pfn)
 {
 	int addr_width = agaw_to_width(domain->agaw) - VTD_PAGE_SHIFT;
@@ -1955,6 +1960,18 @@ static int domain_setup_second_level(struct intel_iommu *iommu,
 	else
 		return intel_pasid_setup_second_level(iommu, domain,
 						     dev, pasid);
+}
+
+static int domain_setup_nested(struct intel_iommu *iommu,
+			       struct dmar_domain *domain,
+			       struct device *dev, ioasid_t pasid,
+			       struct iommu_domain *old)
+{
+	if (old)
+		return intel_pasid_convert_to_nested(iommu, dev,
+						     pasid, domain);
+	else
+		return intel_pasid_setup_nested(iommu, dev, pasid, domain);
 }
 
 static bool dev_is_real_dma_subdevice(struct device *dev)
@@ -4348,9 +4365,9 @@ out_free:
 	return ERR_PTR(ret);
 }
 
-static int intel_iommu_set_dev_pasid(struct iommu_domain *domain,
-				     struct device *dev, ioasid_t pasid,
-				     struct iommu_domain *old)
+int intel_iommu_set_dev_pasid(struct iommu_domain *domain,
+			      struct device *dev, ioasid_t pasid,
+			      struct iommu_domain *old)
 {
 	struct device_domain_info *info = dev_iommu_priv_get(dev);
 	struct dmar_domain *dmar_domain = to_dmar_domain(domain);
@@ -4367,7 +4384,12 @@ static int intel_iommu_set_dev_pasid(struct iommu_domain *domain,
 	if (context_copied(iommu, info->bus, info->devfn))
 		return -EBUSY;
 
-	ret = prepare_domain_attach_device(domain, dev);
+	/* Nested type domain should check its parent domain */
+	if (domain_type_is_nested(dmar_domain))
+		ret = prepare_domain_attach_device(
+				&dmar_domain->s2_domain->domain, dev);
+	else
+		ret = prepare_domain_attach_device(domain, dev);
 	if (ret)
 		return ret;
 
@@ -4375,7 +4397,10 @@ static int intel_iommu_set_dev_pasid(struct iommu_domain *domain,
 	if (IS_ERR(dev_pasid))
 		return PTR_ERR(dev_pasid);
 
-	if (dmar_domain->use_first_level)
+	if (domain_type_is_nested(dmar_domain))
+		ret = domain_setup_nested(iommu, dmar_domain,
+					  dev, pasid, old);
+	else if (dmar_domain->use_first_level)
 		ret = domain_setup_first_level(iommu, dmar_domain,
 					       dev, pasid, old);
 	else
