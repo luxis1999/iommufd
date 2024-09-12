@@ -335,6 +335,17 @@ static inline int domain_setup_passthrough(struct intel_iommu *iommu,
 	return intel_pasid_setup_pass_through(iommu, dev, pasid);
 }
 
+static inline int domain_setup_nested(struct intel_iommu *iommu,
+				      struct dmar_domain *domain,
+				      struct device *dev, ioasid_t pasid,
+				      struct iommu_domain *old)
+{
+	if (old)
+		return intel_pasid_replace_nested(iommu, dev,
+						  pasid, domain);
+	return intel_pasid_setup_nested(iommu, dev, pasid, domain);
+}
+
 void intel_pasid_tear_down_entry(struct intel_iommu *iommu,
 				 struct device *dev, u32 pasid,
 				 bool fault_ignore);
