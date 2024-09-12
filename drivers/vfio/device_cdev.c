@@ -159,24 +159,44 @@ void vfio_df_unbind_iommufd(struct vfio_device_file *df)
 	vfio_device_unblock_group(device);
 }
 
+#define VFIO_ATTACH_FLAGS_MASK VFIO_DEVICE_ATTACH_PASID
+static unsigned long
+vfio_attach_xends[ilog2(VFIO_ATTACH_FLAGS_MASK) + 1] = {
+	XEND_SIZE(VFIO_DEVICE_ATTACH_PASID,
+		  struct vfio_device_attach_iommufd_pt, pasid),
+};
+
+#define VFIO_DETACH_FLAGS_MASK VFIO_DEVICE_DETACH_PASID
+static unsigned long
+vfio_detach_xends[ilog2(VFIO_DETACH_FLAGS_MASK) + 1] = {
+	XEND_SIZE(VFIO_DEVICE_DETACH_PASID,
+		  struct vfio_device_detach_iommufd_pt, pasid),
+};
+
 int vfio_df_ioctl_attach_pt(struct vfio_device_file *df,
 			    struct vfio_device_attach_iommufd_pt __user *arg)
 {
-	struct vfio_device *device = df->device;
 	struct vfio_device_attach_iommufd_pt attach;
-	unsigned long minsz;
+	struct vfio_device *device = df->device;
 	int ret;
 
-	minsz = offsetofend(struct vfio_device_attach_iommufd_pt, pt_id);
+	ret = VFIO_COPY_USER_DATA((void __user *)arg, &attach,
+				  struct vfio_device_attach_iommufd_pt,
+				  pt_id, VFIO_ATTACH_FLAGS_MASK,
+				  vfio_attach_xends);
+	if (ret)
+		return ret;
 
-	if (copy_from_user(&attach, arg, minsz))
-		return -EFAULT;
-
-	if (attach.argsz < minsz || attach.flags)
-		return -EINVAL;
+	if ((attach.flags & VFIO_DEVICE_ATTACH_PASID) &&
+	    !device->ops->pasid_attach_ioas)
+		return -EOPNOTSUPP;
 
 	mutex_lock(&device->dev_set->lock);
-	ret = device->ops->attach_ioas(device, &attach.pt_id);
+	if (attach.flags & VFIO_DEVICE_ATTACH_PASID)
+		ret = device->ops->pasid_attach_ioas(device, attach.pasid,
+						     &attach.pt_id);
+	else
+		ret = device->ops->attach_ioas(device, &attach.pt_id);
 	if (ret)
 		goto out_unlock;
 
@@ -198,20 +218,26 @@ out_unlock:
 int vfio_df_ioctl_detach_pt(struct vfio_device_file *df,
 			    struct vfio_device_detach_iommufd_pt __user *arg)
 {
-	struct vfio_device *device = df->device;
 	struct vfio_device_detach_iommufd_pt detach;
-	unsigned long minsz;
+	struct vfio_device *device = df->device;
+	int ret;
 
-	minsz = offsetofend(struct vfio_device_detach_iommufd_pt, flags);
+	ret = VFIO_COPY_USER_DATA((void __user *)arg, &detach,
+				  struct vfio_device_detach_iommufd_pt,
+				  flags, VFIO_DETACH_FLAGS_MASK,
+				  vfio_detach_xends);
+	if (ret)
+		return ret;
 
-	if (copy_from_user(&detach, arg, minsz))
-		return -EFAULT;
-
-	if (detach.argsz < minsz || detach.flags)
-		return -EINVAL;
+	if ((detach.flags & VFIO_DEVICE_DETACH_PASID) &&
+	    !device->ops->pasid_detach_ioas)
+		return -EOPNOTSUPP;
 
 	mutex_lock(&device->dev_set->lock);
-	device->ops->detach_ioas(device);
+	if (detach.flags & VFIO_DEVICE_DETACH_PASID)
+		device->ops->pasid_detach_ioas(device, detach.pasid);
+	else
+		device->ops->detach_ioas(device);
 	mutex_unlock(&device->dev_set->lock);
 
 	return 0;
