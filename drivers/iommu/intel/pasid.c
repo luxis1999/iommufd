@@ -390,6 +390,40 @@ int intel_pasid_setup_first_level(struct intel_iommu *iommu,
 	return 0;
 }
 
+int intel_pasid_replace_first_level(struct intel_iommu *iommu,
+				    struct device *dev, pgd_t *pgd,
+				    u32 pasid, u16 did, int flags)
+{
+	struct pasid_entry *pte;
+	u16 old_did;
+
+	if (!ecap_flts(iommu->ecap) ||
+	    ((flags & PASID_FLAG_FL5LP) && !cap_fl5lp_support(iommu->cap)))
+		return -EINVAL;
+
+	spin_lock(&iommu->lock);
+	pte = intel_pasid_get_entry(dev, pasid);
+	if (!pte) {
+		spin_unlock(&iommu->lock);
+		return -ENODEV;
+	}
+
+	if (!pasid_pte_is_present(pte)) {
+		spin_unlock(&iommu->lock);
+		return -EINVAL;
+	}
+
+	old_did = pasid_get_domain_id(pte);
+
+	pasid_pte_config_first_level(iommu, pte, pgd, did, flags);
+	spin_unlock(&iommu->lock);
+
+	intel_pasid_flush_present(iommu, dev, pasid, old_did, pte);
+	intel_drain_pasid_prq(dev, pasid);
+
+	return 0;
+}
+
 /*
  * Skip top levels of page tables for iommu which has less agaw
  * than default. Unnecessary for PT mode.
@@ -479,6 +513,55 @@ int intel_pasid_setup_second_level(struct intel_iommu *iommu,
 	spin_unlock(&iommu->lock);
 
 	pasid_flush_caches(iommu, pte, pasid, did);
+
+	return 0;
+}
+
+int intel_pasid_replace_second_level(struct intel_iommu *iommu,
+				     struct dmar_domain *domain,
+				     struct device *dev, u32 pasid)
+{
+	struct pasid_entry *pte;
+	struct dma_pte *pgd;
+	u16 did, old_did;
+	u64 pgd_val;
+	int agaw;
+
+	/*
+	 * If hardware advertises no support for second level
+	 * translation, return directly.
+	 */
+	if (!ecap_slts(iommu->ecap))
+		return -EINVAL;
+
+	pgd = domain->pgd;
+	agaw = iommu_skip_agaw(domain, iommu, &pgd);
+	if (agaw < 0)
+		return -EINVAL;
+
+	pgd_val = virt_to_phys(pgd);
+	did = domain_id_iommu(domain, iommu);
+
+	spin_lock(&iommu->lock);
+	pte = intel_pasid_get_entry(dev, pasid);
+	if (!pte) {
+		spin_unlock(&iommu->lock);
+		return -ENODEV;
+	}
+
+	if (!pasid_pte_is_present(pte)) {
+		spin_unlock(&iommu->lock);
+		return -EINVAL;
+	}
+
+	old_did = pasid_get_domain_id(pte);
+
+	pasid_pte_config_second_level(iommu, pte, pgd_val, agaw,
+				      did, domain->dirty_tracking);
+	spin_unlock(&iommu->lock);
+
+	intel_pasid_flush_present(iommu, dev, pasid, old_did, pte);
+	intel_drain_pasid_prq(dev, pasid);
 
 	return 0;
 }
@@ -591,6 +674,35 @@ int intel_pasid_setup_pass_through(struct intel_iommu *iommu,
 	spin_unlock(&iommu->lock);
 
 	pasid_flush_caches(iommu, pte, pasid, did);
+
+	return 0;
+}
+
+int intel_pasid_replace_pass_through(struct intel_iommu *iommu,
+				     struct device *dev, u32 pasid)
+{
+	u16 did = FLPT_DEFAULT_DID, old_did;
+	struct pasid_entry *pte;
+
+	spin_lock(&iommu->lock);
+	pte = intel_pasid_get_entry(dev, pasid);
+	if (!pte) {
+		spin_unlock(&iommu->lock);
+		return -ENODEV;
+	}
+
+	if (!pasid_pte_is_present(pte)) {
+		spin_unlock(&iommu->lock);
+		return -EINVAL;
+	}
+
+	old_did = pasid_get_domain_id(pte);
+
+	pasid_pte_config_pass_through(iommu, pte, did);
+	spin_unlock(&iommu->lock);
+
+	intel_pasid_flush_present(iommu, dev, pasid, old_did, pte);
+	intel_drain_pasid_prq(dev, pasid);
 
 	return 0;
 }
@@ -721,6 +833,67 @@ int intel_pasid_setup_nested(struct intel_iommu *iommu, struct device *dev,
 	spin_unlock(&iommu->lock);
 
 	pasid_flush_caches(iommu, pte, pasid, did);
+
+	return 0;
+}
+
+int intel_pasid_replace_nested(struct intel_iommu *iommu,
+			       struct device *dev, u32 pasid,
+			       struct dmar_domain *domain)
+{
+	struct iommu_hwpt_vtd_s1 *s1_cfg = &domain->s1_cfg;
+	u16 did = domain_id_iommu(domain, iommu), old_did;
+	struct dmar_domain *s2_domain = domain->s2_domain;
+	struct pasid_entry *pte;
+
+	/* Address width should match the address width supported by hardware */
+	switch (s1_cfg->addr_width) {
+	case ADDR_WIDTH_4LEVEL:
+		break;
+	case ADDR_WIDTH_5LEVEL:
+		if (!cap_fl5lp_support(iommu->cap)) {
+			dev_err_ratelimited(dev,
+					    "5-level paging not supported\n");
+			return -EINVAL;
+		}
+		break;
+	default:
+		dev_err_ratelimited(dev, "Invalid stage-1 address width %d\n",
+				    s1_cfg->addr_width);
+		return -EINVAL;
+	}
+
+	if ((s1_cfg->flags & IOMMU_VTD_S1_SRE) && !ecap_srs(iommu->ecap)) {
+		pr_err_ratelimited("No supervisor request support on %s\n",
+				   iommu->name);
+		return -EINVAL;
+	}
+
+	if ((s1_cfg->flags & IOMMU_VTD_S1_EAFE) && !ecap_eafs(iommu->ecap)) {
+		pr_err_ratelimited("No extended access flag support on %s\n",
+				   iommu->name);
+		return -EINVAL;
+	}
+
+	spin_lock(&iommu->lock);
+	pte = intel_pasid_get_entry(dev, pasid);
+	if (!pte) {
+		spin_unlock(&iommu->lock);
+		return -ENODEV;
+	}
+
+	if (!pasid_pte_is_present(pte)) {
+		spin_unlock(&iommu->lock);
+		return -EINVAL;
+	}
+
+	old_did = pasid_get_domain_id(pte);
+
+	pasid_pte_config_nestd(iommu, pte, s1_cfg, s2_domain, did);
+	spin_unlock(&iommu->lock);
+
+	intel_pasid_flush_present(iommu, dev, pasid, old_did, pte);
+	intel_drain_pasid_prq(dev, pasid);
 
 	return 0;
 }
