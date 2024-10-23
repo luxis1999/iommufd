@@ -237,6 +237,32 @@ devtlb_invalidation_with_pasid(struct intel_iommu *iommu,
 }
 
 /*
+ * This function flushes cache for updating a pasid table entry.
+ * Also, it would drain PRQ if it's requested. Caller of it should
+ * not modify the in-use pasid table entries.
+ */
+static void intel_pasid_flush_present(struct intel_iommu *iommu,
+				      struct device *dev,
+				      u32 pasid, u16 did, u16 pgtt,
+				      struct pasid_entry *pte, u32 flags)
+{
+	if (!ecap_coherent(iommu->ecap))
+		clflush_cache_range(pte, sizeof(*pte));
+
+	pasid_cache_invalidation_with_pasid(iommu, did, pasid);
+
+	if (pgtt == PASID_ENTRY_PGTT_PT || pgtt == PASID_ENTRY_PGTT_FL_ONLY)
+		qi_flush_piotlb(iommu, did, pasid, 0, -1, 0);
+	else
+		iommu->flush.flush_iotlb(iommu, did, 0, 0, DMA_TLB_DSI_FLUSH);
+
+	devtlb_invalidation_with_pasid(iommu, dev, pasid);
+
+	if (flags & INTEL_PASID_TEARDOWN_DRAIN_PRQ)
+		intel_drain_pasid_prq(dev, pasid);
+}
+
+/*
  * Caller can request to drain PRQ in this helper if it hasn't done so,
  * e.g. in a path which doesn't follow remove_dev_pasid().
  */
@@ -259,20 +285,7 @@ void intel_pasid_tear_down_entry(struct intel_iommu *iommu, struct device *dev,
 				flags & INTEL_PASID_TEARDOWN_IGNORE_FAULT);
 	spin_unlock(&iommu->lock);
 
-	if (!ecap_coherent(iommu->ecap))
-		clflush_cache_range(pte, sizeof(*pte));
-
-	pasid_cache_invalidation_with_pasid(iommu, did, pasid);
-
-	if (pgtt == PASID_ENTRY_PGTT_PT || pgtt == PASID_ENTRY_PGTT_FL_ONLY)
-		qi_flush_piotlb(iommu, did, pasid, 0, -1, 0);
-	else
-		iommu->flush.flush_iotlb(iommu, did, 0, 0, DMA_TLB_DSI_FLUSH);
-
-	devtlb_invalidation_with_pasid(iommu, dev, pasid);
-
-	if (flags & INTEL_PASID_TEARDOWN_DRAIN_PRQ)
-		intel_drain_pasid_prq(dev, pasid);
+	intel_pasid_flush_present(iommu, dev, pasid, did, pgtt, pte, flags);
 }
 
 /*
