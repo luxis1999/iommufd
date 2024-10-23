@@ -4630,6 +4630,9 @@ static int identity_domain_set_dev_pasid(struct iommu_domain *domain,
 	if (!pasid_supported(iommu) || dev_is_real_dma_subdevice(dev))
 		return -EOPNOTSUPP;
 
+	if (old)
+		return intel_pasid_convert_to_pass_through(iommu, dev, pasid);
+
 	return intel_pasid_setup_pass_through(iommu, dev, pasid);
 }
 
