@@ -214,8 +214,13 @@ static int intel_svm_set_dev_pasid(struct iommu_domain *domain,
 
 	/* Setup the pasid table: */
 	sflags = cpu_feature_enabled(X86_FEATURE_LA57) ? PASID_FLAG_FL5LP : 0;
-	ret = intel_pasid_setup_first_level(iommu, dev, mm->pgd, pasid,
-					    FLPT_DEFAULT_DID, sflags);
+	if (old)
+		ret = intel_pasid_convert_to_first_level(iommu, dev,
+							 mm->pgd, pasid,
+							 FLPT_DEFAULT_DID, sflags);
+	else
+		ret = intel_pasid_setup_first_level(iommu, dev, mm->pgd, pasid,
+						    FLPT_DEFAULT_DID, sflags);
 	if (ret)
 		goto out_remove_dev_pasid;
 
