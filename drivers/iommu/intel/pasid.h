@@ -326,6 +326,15 @@ static inline int domain_setup_second_level(struct intel_iommu *iommu,
 	return intel_pasid_setup_second_level(iommu, domain, dev, pasid);
 }
 
+static inline int domain_setup_passthrough(struct intel_iommu *iommu,
+					   struct device *dev, ioasid_t pasid,
+					   struct iommu_domain *old)
+{
+	if (old)
+		return intel_pasid_replace_pass_through(iommu, dev, pasid);
+	return intel_pasid_setup_pass_through(iommu, dev, pasid);
+}
+
 void intel_pasid_tear_down_entry(struct intel_iommu *iommu,
 				 struct device *dev, u32 pasid,
 				 bool fault_ignore);
