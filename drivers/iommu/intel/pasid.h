@@ -310,4 +310,8 @@ void intel_pasid_setup_page_snoop_control(struct intel_iommu *iommu,
 					  struct device *dev, u32 pasid);
 int intel_pasid_setup_sm_context(struct device *dev);
 void intel_pasid_teardown_sm_context(struct device *dev);
+
+/* Flags used by caller of intel_pasid_flush_present() */
+#define INTEL_PASID_FLUSH_PRESENT_DRAIN_PRQ	BIT(0)
+
 #endif /* __INTEL_PASID_H */
