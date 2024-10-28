@@ -4352,6 +4352,10 @@ static int intel_iommu_set_dev_pasid(struct iommu_domain *domain,
 	if (WARN_ON_ONCE(!(domain->type & __IOMMU_DOMAIN_PAGING)))
 		return -EINVAL;
 
+	/* No SVA domain replacement usage so far */
+	if (old && old->type == IOMMU_DOMAIN_SVA)
+		return -EOPNOTSUPP;
+
 	if (!pasid_supported(iommu) || dev_is_real_dma_subdevice(dev))
 		return -EOPNOTSUPP;
 
@@ -4619,6 +4623,10 @@ static int identity_domain_set_dev_pasid(struct iommu_domain *domain,
 	struct device_domain_info *info = dev_iommu_priv_get(dev);
 	struct intel_iommu *iommu = info->iommu;
 	int ret;
+
+	/* No SVA domain replacement usage so far */
+	if (old && old->type == IOMMU_DOMAIN_SVA)
+		return -EOPNOTSUPP;
 
 	if (!pasid_supported(iommu) || dev_is_real_dma_subdevice(dev))
 		return -EOPNOTSUPP;
