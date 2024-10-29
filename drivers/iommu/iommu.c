@@ -3454,11 +3454,13 @@ int iommu_attach_device_pasid(struct iommu_domain *domain,
 			      struct iommu_attach_handle *handle)
 {
 	/* Caller must be a probed driver on dev */
+	const struct iommu_ops *ops = dev_iommu_ops(dev);
 	struct iommu_group *group = dev->iommu_group;
 	struct group_device *device;
 	int ret;
 
-	if (!domain->ops->set_dev_pasid)
+	if (!domain->ops->set_dev_pasid ||
+	    !ops->remove_dev_pasid)
 		return -EOPNOTSUPP;
 
 	if (!group)
