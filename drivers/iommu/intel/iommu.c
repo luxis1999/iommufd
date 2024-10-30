@@ -4357,6 +4357,7 @@ static int intel_iommu_set_dev_pasid(struct iommu_domain *domain,
 	struct dev_pasid_info *dev_pasid;
 	int ret;
 
+printk("%s pasid: %u - 1\n", __func__, pasid);
 	if (WARN_ON_ONCE(!(domain->type & __IOMMU_DOMAIN_PAGING)))
 		return -EINVAL;
 
@@ -4364,23 +4365,27 @@ static int intel_iommu_set_dev_pasid(struct iommu_domain *domain,
 	if (old && old->type == IOMMU_DOMAIN_SVA)
 		return -EOPNOTSUPP;
 
+printk("%s pasid: %u - 2\n", __func__, pasid);
 	if (!pasid_supported(iommu) || dev_is_real_dma_subdevice(dev))
 		return -EOPNOTSUPP;
-
+# if 0
 	if (domain->dirty_ops)
 		return -EINVAL;
-
+#endif
 	if (context_copied(iommu, info->bus, info->devfn))
 		return -EBUSY;
 
+printk("%s pasid: %u - 3\n", __func__, pasid);
 	ret = prepare_domain_attach_device(domain, dev);
 	if (ret)
 		return ret;
 
+printk("%s pasid: %u - 4\n", __func__, pasid);
 	dev_pasid = domain_add_dev_pasid(domain, dev, pasid);
 	if (IS_ERR(dev_pasid))
 		return PTR_ERR(dev_pasid);
 
+printk("%s pasid: %u - 5\n", __func__, pasid);
 	if (dmar_domain->use_first_level)
 		ret = domain_setup_first_level(iommu, dmar_domain,
 					       dev, pasid, old);
@@ -4394,6 +4399,7 @@ static int intel_iommu_set_dev_pasid(struct iommu_domain *domain,
 
 	intel_iommu_debugfs_create_dev_pasid(dev_pasid);
 
+printk("%s pasid: %u - succ\n", __func__, pasid);
 	return 0;
 
 out_remove_dev_pasid:

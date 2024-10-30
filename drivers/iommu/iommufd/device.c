@@ -342,10 +342,12 @@ int iommufd_dev_replace_handle(struct iommufd_device *idev,
 	struct iommufd_attach_handle *handle;
 	int ret;
 
+printk("%s pasid: %u - 1\n", __func__, pasid);
 	handle = kzalloc(sizeof(*handle), GFP_KERNEL);
 	if (!handle)
 		return -ENOMEM;
 
+printk("%s pasid: %u - 2\n", __func__, pasid);
 	handle->idev = idev;
 	if (pasid == IOMMU_NO_PASID)
 		ret = iommu_replace_group_handle(idev->igroup->group,
@@ -355,6 +357,7 @@ int iommufd_dev_replace_handle(struct iommufd_device *idev,
 						 pasid, &handle->handle);
 	if (ret)
 		kfree(handle);
+printk("%s pasid: %u - 3nd, ret: %d\n", __func__, pasid, ret);
 
 	return ret;
 }

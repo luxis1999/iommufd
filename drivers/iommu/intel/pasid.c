@@ -549,7 +549,7 @@ int intel_pasid_replace_second_level(struct intel_iommu *iommu,
 		return -ENODEV;
 	}
 
-	if (pasid_pte_is_present(pte)) {
+	if (!pasid_pte_is_present(pte)) {
 		spin_unlock(&iommu->lock);
 		return -EINVAL;
 	}
@@ -691,7 +691,7 @@ int intel_pasid_replace_pass_through(struct intel_iommu *iommu,
 		return -ENODEV;
 	}
 
-	if (pasid_pte_is_present(pte)) {
+	if (!pasid_pte_is_present(pte)) {
 		spin_unlock(&iommu->lock);
 		return -EINVAL;
 	}
@@ -881,7 +881,7 @@ int intel_pasid_replace_nested(struct intel_iommu *iommu,
 		spin_unlock(&iommu->lock);
 		return -ENODEV;
 	}
-	if (pasid_pte_is_present(pte)) {
+	if (!pasid_pte_is_present(pte)) {
 		spin_unlock(&iommu->lock);
 		return -EINVAL;
 	}

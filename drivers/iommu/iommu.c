@@ -3543,12 +3543,14 @@ int iommu_replace_device_pasid(struct iommu_domain *domain,
 	if (!group)
 		return -ENODEV;
 
+printk("%s pasid: %u - 1\n", __func__, pasid);
 	if (!dev_has_iommu(dev) || dev_iommu_ops(dev) != domain->owner ||
 	    pasid == IOMMU_NO_PASID || !handle)
 		return -EINVAL;
 
 	handle->domain = domain;
 
+printk("%s pasid: %u - 2\n", __func__, pasid);
 	mutex_lock(&group->mutex);
 	/*
 	 * The iommu_attach_handle of the pasid becomes inconsistent with the
@@ -3566,10 +3568,12 @@ int iommu_replace_device_pasid(struct iommu_domain *domain,
 		goto out_unlock;
 	}
 
+printk("%s pasid: %u - 3\n", __func__, pasid);
 	ret = xa_err(curr);
 	if (ret)
 		goto out_unlock;
 
+printk("%s pasid: %u - 4\n", __func__, pasid);
 	if (curr->domain == domain)
 		goto out_unlock;
 
@@ -3577,8 +3581,10 @@ int iommu_replace_device_pasid(struct iommu_domain *domain,
 	if (ret)
 		WARN_ON(handle != xa_store(&group->pasid_array, pasid,
 					   curr, GFP_KERNEL));
+printk("%s pasid: %u - 5\n", __func__, pasid);
 out_unlock:
 	mutex_unlock(&group->mutex);
+printk("%s pasid: %u - 6, ret: %d\n", __func__, pasid, ret);
 	return ret;
 }
 EXPORT_SYMBOL_NS_GPL(iommu_replace_device_pasid, IOMMUFD_INTERNAL);

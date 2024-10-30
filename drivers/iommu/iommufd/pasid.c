@@ -44,6 +44,7 @@ iommufd_device_pasid_do_replace(struct iommufd_device *idev, ioasid_t pasid,
 	void *curr;
 	int rc;
 
+printk("%s pasid: %u - 1\n", __func__, pasid);
 	refcount_inc(&hwpt->obj.users);
 	curr = xa_store(&idev->pasid_hwpts, pasid, hwpt, GFP_KERNEL);
 	rc = xa_err(curr);
@@ -59,6 +60,7 @@ iommufd_device_pasid_do_replace(struct iommufd_device *idev, ioasid_t pasid,
 	if (curr == hwpt)
 		goto out_put_hwpt;
 
+printk("%s pasid: %u - 2\n", __func__, pasid);
 	/*
 	 * After replacement, the reference on the old hwpt is retained
 	 * in this thread as caller would free it.
@@ -70,11 +72,13 @@ iommufd_device_pasid_do_replace(struct iommufd_device *idev, ioasid_t pasid,
 		goto out_put_hwpt;
 	}
 
+printk("%s pasid: %u - succ\n", __func__, pasid);
 	/* Caller must destroy old_hwpt */
 	return curr;
 
 out_put_hwpt:
 	refcount_dec(&hwpt->obj.users);
+printk("%s pasid: %u - rc: %d\n", __func__, pasid, rc);
 	return ERR_PTR(rc);
 }
 
@@ -126,6 +130,7 @@ EXPORT_SYMBOL_NS_GPL(iommufd_device_pasid_attach, IOMMUFD);
 int iommufd_device_pasid_replace(struct iommufd_device *idev,
 				 ioasid_t pasid, u32 *pt_id)
 {
+printk("%s pasid: %u\n", __func__, pasid);
 	return iommufd_device_change_pt(idev, pasid, pt_id,
 					&iommufd_device_pasid_do_replace);
 }

@@ -140,6 +140,7 @@ static int intel_nested_set_dev_pasid(struct iommu_domain *domain,
 	struct dev_pasid_info *dev_pasid;
 	int ret;
 
+printk("%s pasid: %u - 1\n", __func__, pasid);
 	/* No SVA domain replacement usage so far */
 	if (old && old->type == IOMMU_DOMAIN_SVA)
 		return -EOPNOTSUPP;
@@ -150,20 +151,24 @@ static int intel_nested_set_dev_pasid(struct iommu_domain *domain,
 	if (context_copied(iommu, info->bus, info->devfn))
 		return -EBUSY;
 
+printk("%s pasid: %u - 2\n", __func__, pasid);
 	ret = prepare_domain_attach_device(&dmar_domain->s2_domain->domain,
 					   dev);
 	if (ret)
 		return ret;
 
+printk("%s pasid: %u - 3\n", __func__, pasid);
 	dev_pasid = domain_add_dev_pasid(domain, dev, pasid);
 	if (IS_ERR(dev_pasid))
 		return PTR_ERR(dev_pasid);
 
+printk("%s pasid: %u - 4\n", __func__, pasid);
 	ret = domain_setup_nested(iommu, dmar_domain, dev, pasid, old);
 	if (ret)
 		goto out_remove_dev_pasid;
 
 	domain_remove_dev_pasid(old, dev, pasid);
+printk("%s pasid: %u - succ\n", __func__, pasid);
 
 	return 0;
 

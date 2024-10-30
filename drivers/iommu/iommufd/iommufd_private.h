@@ -570,7 +570,9 @@ static inline int iommufd_hwpt_replace_device(struct iommufd_device *idev,
 
 	curr = iommufd_device_get_attach_handle(idev, pasid);
 
+printk("%s pasid: %u - 1\n", __func__, pasid);
 	ret = iommufd_dev_replace_handle(idev, pasid, hwpt, old);
+printk("%s pasid: %u - 2, ret: %d\n", __func__, pasid, ret);
 	if (ret)
 		return ret;
 
