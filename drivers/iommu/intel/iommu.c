@@ -3545,13 +3545,15 @@ intel_iommu_domain_alloc_user(struct device *dev, u32 flags,
 
 	/* Must be NESTING domain */
 	if (parent) {
-		if (!nested_supported(iommu) || flags)
+		if (!nested_supported(iommu) ||
+		    flags & ~IOMMU_HWPT_ALLOC_PASID)
 			return ERR_PTR(-EOPNOTSUPP);
 		return intel_nested_domain_alloc(parent, user_data);
 	}
 
 	if (flags &
-	    (~(IOMMU_HWPT_ALLOC_NEST_PARENT | IOMMU_HWPT_ALLOC_DIRTY_TRACKING)))
+	    (~(IOMMU_HWPT_ALLOC_NEST_PARENT | IOMMU_HWPT_ALLOC_DIRTY_TRACKING |
+	       IOMMU_HWPT_ALLOC_PASID)))
 		return ERR_PTR(-EOPNOTSUPP);
 	if (nested_parent && !nested_supported(iommu))
 		return ERR_PTR(-EOPNOTSUPP);
