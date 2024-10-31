@@ -296,6 +296,7 @@ struct iommufd_hw_pagetable {
 	struct iommufd_object obj;
 	struct iommu_domain *domain;
 	struct iommufd_fault *fault;
+	bool pasid_compat : 1;
 };
 
 struct iommufd_hwpt_paging {
@@ -531,6 +532,9 @@ static inline int iommufd_hwpt_attach_device(struct iommufd_hw_pagetable *hwpt,
 					     struct iommufd_device *idev,
 					     ioasid_t pasid)
 {
+	if (idev->dev->iommu->max_pasids && !hwpt->pasid_compat)
+		return -EINVAL;
+
 	if (hwpt->fault)
 		return iommufd_fault_domain_attach_dev(hwpt, idev, pasid);
 
@@ -563,6 +567,9 @@ static inline int iommufd_hwpt_replace_device(struct iommufd_device *idev,
 {
 	struct iommufd_attach_handle *curr;
 	int ret;
+
+	if (idev->dev->iommu->max_pasids && !hwpt->pasid_compat)
+		return -EINVAL;
 
 	if (old->fault || hwpt->fault)
 		return iommufd_fault_domain_replace_dev(idev, pasid,
