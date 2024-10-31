@@ -15,6 +15,8 @@ iommufd_device_pasid_do_attach(struct iommufd_device *idev, ioasid_t pasid,
 	int rc;
 
 	refcount_inc(&hwpt->obj.users);
+
+	mutex_lock(&idev->igroup->lock);
 	curr = xa_cmpxchg(&idev->pasid_hwpts, pasid, NULL, hwpt, GFP_KERNEL);
 	if (curr) {
 		if (curr == hwpt)
@@ -30,9 +32,11 @@ iommufd_device_pasid_do_attach(struct iommufd_device *idev, ioasid_t pasid,
 		goto err_put_hwpt;
 	}
 
+	mutex_unlock(&idev->igroup->lock);
 	return NULL;
 
 err_put_hwpt:
+	mutex_unlock(&idev->igroup->lock);
 	refcount_dec(&hwpt->obj.users);
 	return rc ? ERR_PTR(rc) : NULL;
 }
@@ -45,6 +49,8 @@ iommufd_device_pasid_do_replace(struct iommufd_device *idev, ioasid_t pasid,
 	int rc;
 
 	refcount_inc(&hwpt->obj.users);
+
+	mutex_lock(&idev->igroup->lock);
 	curr = xa_store(&idev->pasid_hwpts, pasid, hwpt, GFP_KERNEL);
 	rc = xa_err(curr);
 	if (rc)
@@ -70,10 +76,12 @@ iommufd_device_pasid_do_replace(struct iommufd_device *idev, ioasid_t pasid,
 		goto out_put_hwpt;
 	}
 
+	mutex_unlock(&idev->igroup->lock);
 	/* Caller must destroy old_hwpt */
 	return curr;
 
 out_put_hwpt:
+	mutex_unlock(&idev->igroup->lock);
 	refcount_dec(&hwpt->obj.users);
 	return rc ? ERR_PTR(rc) : NULL;
 }
@@ -148,10 +156,14 @@ void iommufd_device_pasid_detach(struct iommufd_device *idev, ioasid_t pasid)
 {
 	struct iommufd_hw_pagetable *hwpt;
 
+	mutex_lock(&idev->igroup->lock);
 	hwpt = xa_erase(&idev->pasid_hwpts, pasid);
-	if (WARN_ON(!hwpt))
+	if (WARN_ON(!hwpt)) {
+		mutex_unlock(&idev->igroup->lock);
 		return;
+	}
 	iommufd_hwpt_detach_device(hwpt, idev, pasid);
+	mutex_unlock(&idev->igroup->lock);
 	iommufd_hw_pagetable_put(idev->ictx, hwpt);
 }
 EXPORT_SYMBOL_NS_GPL(iommufd_device_pasid_detach, "IOMMUFD");
