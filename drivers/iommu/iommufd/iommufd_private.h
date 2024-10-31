@@ -513,7 +513,14 @@ static inline int iommufd_hwpt_attach_device(struct iommufd_hw_pagetable *hwpt,
 					     struct iommufd_device *idev,
 					     ioasid_t pasid)
 {
-	if (pasid != IOMMU_NO_PASID && !hwpt->pasid_compat)
+	lockdep_assert_held(&idev->igroup->lock);
+
+	if (pasid == IOMMU_NO_PASID &&
+	    !xa_empty(&idev->pasid_hwpts) && !hwpt->pasid_compat)
+		return -EINVAL;
+
+	if (pasid != IOMMU_NO_PASID &&
+	    (!idev->igroup->hwpt->pasid_compat || !hwpt->pasid_compat))
 		return -EINVAL;
 
 	if (hwpt->fault)
@@ -549,7 +556,14 @@ static inline int iommufd_hwpt_replace_device(struct iommufd_device *idev,
 	struct iommufd_attach_handle *curr;
 	int ret;
 
-	if (pasid != IOMMU_NO_PASID && !hwpt->pasid_compat)
+	lockdep_assert_held(&idev->igroup->lock);
+
+	if (pasid == IOMMU_NO_PASID &&
+	    !xa_empty(&idev->pasid_hwpts) && !hwpt->pasid_compat)
+		return -EINVAL;
+
+	if (pasid != IOMMU_NO_PASID &&
+	    (!idev->igroup->hwpt->pasid_compat || !hwpt->pasid_compat))
 		return -EINVAL;
 
 	if (old->fault || hwpt->fault)
