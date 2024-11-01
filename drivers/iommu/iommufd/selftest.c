@@ -348,13 +348,18 @@ mock_domain_alloc_user(struct device *dev, u32 flags,
 		       struct iommu_domain *parent,
 		       const struct iommu_user_data *user_data)
 {
+	struct mock_dev *mdev = container_of(dev, struct mock_dev, dev);
 	struct mock_iommu_domain *mock_parent;
 	struct iommu_hwpt_selftest user_cfg;
 	int rc;
 
+	if ((flags & IOMMU_HWPT_ALLOC_PASID) &&
+	    (!(mdev->flags & MOCK_FLAGS_DEVICE_PASID) ||
+	     !dev->iommu->iommu_dev->max_pasids))
+		return ERR_PTR(-EOPNOTSUPP);
+
 	/* must be mock_domain */
 	if (!parent) {
-		struct mock_dev *mdev = container_of(dev, struct mock_dev, dev);
 		bool has_dirty_flag = flags & IOMMU_HWPT_ALLOC_DIRTY_TRACKING;
 		bool no_dirty_ops = mdev->flags & MOCK_FLAGS_DEVICE_NO_DIRTY;
 		struct iommu_domain *domain;
@@ -364,9 +369,6 @@ mock_domain_alloc_user(struct device *dev, u32 flags,
 			       IOMMU_HWPT_ALLOC_PASID)))
 			return ERR_PTR(-EOPNOTSUPP);
 		if (user_data || (has_dirty_flag && no_dirty_ops))
-			return ERR_PTR(-EOPNOTSUPP);
-		if ((flags & IOMMU_HWPT_ALLOC_PASID) &&
-			!(mdev->flags & MOCK_FLAGS_DEVICE_PASID))
 			return ERR_PTR(-EOPNOTSUPP);
 		domain = mock_domain_alloc_paging(dev);
 		if (!domain)
