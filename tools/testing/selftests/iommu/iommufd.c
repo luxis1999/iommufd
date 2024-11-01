@@ -2401,8 +2401,10 @@ FIXTURE_SETUP(iommufd_device_pasid)
 	ASSERT_NE(-1, self->fd);
 	test_ioctl_ioas_alloc(&self->ioas_id);
 
-	test_cmd_mock_domain(self->ioas_id, &self->stdev_id,
-			     &self->hwpt_id, &self->device_id);
+	test_cmd_mock_domain_flags(self->ioas_id,
+				   MOCK_FLAGS_DEVICE_PASID,
+				   &self->stdev_id, &self->hwpt_id,
+				   &self->device_id);
 }
 
 FIXTURE_TEARDOWN(iommufd_device_pasid)
@@ -2417,6 +2419,7 @@ TEST_F(iommufd_device_pasid, pasid_attach)
 			.iotlb =  IOMMU_TEST_IOTLB_DEFAULT,
 		};
 		uint32_t nested_hwpt_id[2] = {};
+		uint32_t no_pasid_compat_hwpt;
 		uint32_t parent_hwpt_id = 0;
 		uint32_t fault_id, fault_fd;
 		uint32_t iopf_hwpt_id;
@@ -2425,21 +2428,25 @@ TEST_F(iommufd_device_pasid, pasid_attach)
 
 		/* Allocate two nested hwpts sharing one common parent hwpt */
 		test_cmd_hwpt_alloc(self->device_id, self->ioas_id,
-				    IOMMU_HWPT_ALLOC_NEST_PARENT,
+				    IOMMU_HWPT_ALLOC_NEST_PARENT |
+				    IOMMU_HWPT_ALLOC_PASID,
 				    &parent_hwpt_id);
 
-		test_cmd_hwpt_alloc_nested(self->device_id, parent_hwpt_id, 0,
+		test_cmd_hwpt_alloc_nested(self->device_id, parent_hwpt_id,
+					   IOMMU_HWPT_ALLOC_PASID,
 					   &nested_hwpt_id[0],
 					   IOMMU_HWPT_DATA_SELFTEST,
 					   &data, sizeof(data));
-		test_cmd_hwpt_alloc_nested(self->device_id, parent_hwpt_id, 0,
+		test_cmd_hwpt_alloc_nested(self->device_id, parent_hwpt_id,
+					   IOMMU_HWPT_ALLOC_PASID,
 					   &nested_hwpt_id[1],
 					   IOMMU_HWPT_DATA_SELFTEST,
 					   &data, sizeof(data));
 
 		test_ioctl_fault_alloc(&fault_id, &fault_fd);
 		test_cmd_hwpt_alloc_iopf(self->device_id, parent_hwpt_id, fault_id,
-					 IOMMU_HWPT_FAULT_ID_VALID, &iopf_hwpt_id,
+					 IOMMU_HWPT_FAULT_ID_VALID | IOMMU_HWPT_ALLOC_PASID,
+					 &iopf_hwpt_id,
 					 IOMMU_HWPT_DATA_SELFTEST, &data,
 					 sizeof(data));
 		/*
@@ -2631,10 +2638,24 @@ TEST_F(iommufd_device_pasid, pasid_attach)
 						      pasid, 0, &result));
 		EXPECT_EQ(1, result);
 
-		/* Attach to iopf-capable hwpt */
 		test_ioctl_destroy(iopf_hwpt_id);
 		close(fault_fd);
 		test_ioctl_destroy(fault_id);
+
+		/* Negative */
+		/*
+		 * Attach non pasid compat hwpt to pasid-capable device, should
+		 * fail, and have null domain.
+		 */
+		test_cmd_hwpt_alloc(self->device_id, self->ioas_id,
+				    IOMMU_HWPT_ALLOC_NEST_PARENT,
+				    &no_pasid_compat_hwpt);
+		test_err_cmd_pasid_attach(EINVAL, pasid, no_pasid_compat_hwpt);
+		ASSERT_EQ(0,
+			  test_cmd_pasid_check_domain(self->fd, self->stdev_id,
+						      pasid, 0, &result));
+		EXPECT_EQ(1, result);
+		test_ioctl_destroy(no_pasid_compat_hwpt);
 
 		test_ioctl_destroy(nested_hwpt_id[0]);
 		test_ioctl_destroy(nested_hwpt_id[1]);
