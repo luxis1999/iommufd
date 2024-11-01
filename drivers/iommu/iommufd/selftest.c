@@ -360,9 +360,13 @@ mock_domain_alloc_user(struct device *dev, u32 flags,
 		struct iommu_domain *domain;
 
 		if (flags & (~(IOMMU_HWPT_ALLOC_NEST_PARENT |
-			       IOMMU_HWPT_ALLOC_DIRTY_TRACKING)))
+			       IOMMU_HWPT_ALLOC_DIRTY_TRACKING |
+			       IOMMU_HWPT_ALLOC_PASID)))
 			return ERR_PTR(-EOPNOTSUPP);
 		if (user_data || (has_dirty_flag && no_dirty_ops))
+			return ERR_PTR(-EOPNOTSUPP);
+		if ((flags & IOMMU_HWPT_ALLOC_PASID) &&
+			!(mdev->flags & MOCK_FLAGS_DEVICE_PASID))
 			return ERR_PTR(-EOPNOTSUPP);
 		domain = mock_domain_alloc_paging(dev);
 		if (!domain)
@@ -374,7 +378,8 @@ mock_domain_alloc_user(struct device *dev, u32 flags,
 	}
 
 	/* must be mock_domain_nested */
-	if (user_data->type != IOMMU_HWPT_DATA_SELFTEST || flags)
+	if (user_data->type != IOMMU_HWPT_DATA_SELFTEST ||
+	    flags & ~IOMMU_HWPT_ALLOC_PASID)
 		return ERR_PTR(-EOPNOTSUPP);
 	if (!parent || parent->ops != mock_ops.default_domain_ops)
 		return ERR_PTR(-EINVAL);
@@ -729,7 +734,8 @@ static struct mock_dev *mock_dev_create(unsigned long dev_flags)
 	int rc;
 
 	if (dev_flags &
-	    ~(MOCK_FLAGS_DEVICE_NO_DIRTY | MOCK_FLAGS_DEVICE_HUGE_IOVA))
+	    ~(MOCK_FLAGS_DEVICE_NO_DIRTY |
+		    MOCK_FLAGS_DEVICE_HUGE_IOVA | MOCK_FLAGS_DEVICE_PASID))
 		return ERR_PTR(-EINVAL);
 
 	mdev = kzalloc(sizeof(*mdev), GFP_KERNEL);
@@ -768,10 +774,12 @@ static struct mock_dev *mock_dev_create(unsigned long dev_flags)
 	if (rc)
 		goto err_put;
 
-	rc = device_create_managed_software_node(&mdev->dev, prop, NULL);
-	if (rc) {
-		dev_err(&mdev->dev, "add pasid-num-bits property failed, rc: %d", rc);
-		goto err_put;
+	if (dev_flags & MOCK_FLAGS_DEVICE_PASID) {
+		rc = device_create_managed_software_node(&mdev->dev, prop, NULL);
+		if (rc) {
+			dev_err(&mdev->dev, "add pasid-num-bits property failed, rc: %d", rc);
+			goto err_put;
+		}
 	}
 
 	rc = device_add(&mdev->dev);
