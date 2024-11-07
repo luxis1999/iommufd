@@ -34,6 +34,27 @@ void vfio_df_close(struct vfio_device_file *df);
 struct vfio_device_file *
 vfio_allocate_device_file(struct vfio_device *device);
 
+ssize_t __vfio_copy_user_data(void *buffer, void __user *arg,
+			      unsigned long minsz, u32 flags_mask,
+			      const unsigned long *xend_array);
+
+#define vfio_copy_user_data(_arg, _local_buffer, _struct, _min_last,        \
+			    _flags_mask, _xend_array)                       \
+({                                                                          \
+	BUILD_BUG_ON(ARRAY_SIZE(_xend_array) < ilog2(_flags_mask));         \
+	__vfio_copy_user_data(_local_buffer, _arg,                          \
+			     offsetofend(_struct, _min_last) +              \
+			     BUILD_BUG_ON_ZERO(offsetof(_struct, argsz) !=  \
+					       0) +                         \
+			     BUILD_BUG_ON_ZERO(offsetof(_struct, flags) !=  \
+					       sizeof(u32)),                \
+			     _flags_mask, _xend_array);                     \
+})
+
+#define XEND_SIZE(_flag, _struct, _xlast)                                   \
+	[ilog2(_flag)] = offsetofend(_struct, _xlast) +                     \
+			 BUILD_BUG_ON_ZERO(_flag == 0)                      \
+
 extern const struct file_operations vfio_device_fops;
 
 #ifdef CONFIG_VFIO_NOIOMMU
