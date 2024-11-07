@@ -198,7 +198,7 @@ int vfio_iommufd_physical_pasid_attach_ioas(struct vfio_device *vdev,
 	if (rc)
 		ida_free(&vdev->pasids, pasid);
 
-	return rc;
+	return 0;
 }
 EXPORT_SYMBOL_GPL(vfio_iommufd_physical_pasid_attach_ioas);
 
