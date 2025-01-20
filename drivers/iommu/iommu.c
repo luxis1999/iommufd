@@ -3423,9 +3423,9 @@ static void *iommu_make_pasid_entry(struct iommu_domain *domain,
  *
  * Return: 0 on success, or an error.
  */
-int iommu_attach_device_pasid(struct iommu_domain *domain,
-			      struct device *dev, ioasid_t pasid,
-			      struct iommu_attach_handle *handle)
+int __iommu_attach_device_pasid(struct iommu_domain *domain,
+				struct device *dev, ioasid_t pasid,
+				struct iommu_attach_handle *handle)
 {
 	/* Caller must be a probed driver on dev */
 	struct iommu_group *group = dev->iommu_group;
@@ -3476,7 +3476,7 @@ out_unlock:
 	mutex_unlock(&group->mutex);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(iommu_attach_device_pasid);
+EXPORT_SYMBOL_GPL(__iommu_attach_device_pasid);
 
 /*
  * iommu_detach_device_pasid() - Detach the domain from pasid of device
